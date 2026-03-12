@@ -1,0 +1,27 @@
+{
+  "name": "@mamavpn/miniapp",
+  "version": "0.1.0",
+  "private": true,
+  "scripts": {
+    "dev": "./node_modules/.bin/next dev -p 3001",
+    "build": "./node_modules/.bin/next build",
+    "start": "./node_modules/.bin/next start -p 3001",
+    "lint": "./node_modules/.bin/next lint",
+    "format": "prettier --write \"app/**/*.{ts,tsx}\""
+  },
+  "dependencies": {
+    "@mamavpn/shared": "workspace:*",
+    "dotenv": "^16.4.7",
+    "next": "^15.1.0",
+    "react": "^19.0.0",
+    "react-dom": "^19.0.0"
+  },
+  "devDependencies": {
+    "@types/node": "^22.10.2",
+    "@types/react": "^19.0.1",
+    "@types/react-dom": "^19.0.2",
+    "eslint": "^9.17.0",
+    "eslint-config-next": "^15.1.0",
+    "typescript": "^5.7.2"
+  }
+}

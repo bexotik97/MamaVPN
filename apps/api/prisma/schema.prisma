@@ -1,0 +1,309 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+enum DevicePlatform {
+  ios
+  android
+  macos
+  windows
+  linux
+  android_tv
+  router
+}
+
+enum SubscriptionStatus {
+  trial
+  active
+  grace_period
+  expired
+  suspended
+}
+
+enum PaymentStatus {
+  pending
+  requires_action
+  paid
+  failed
+  refunded
+}
+
+enum BillingProvider {
+  mock
+  telegram_stars
+  crypto
+  yookassa
+}
+
+enum AccessKeyType {
+  primary
+  fallback
+  backup
+}
+
+enum SupportTicketStatus {
+  open
+  waiting_for_user
+  resolved
+  closed
+}
+
+enum BroadcastType {
+  incident
+  reminder
+  promo
+  retention
+  maintenance
+}
+
+enum AuditActorType {
+  system
+  admin
+  user
+  bot
+}
+
+model User {
+  id               String            @id @default(cuid())
+  email            String?           @unique
+  languageCode     String            @default("ru")
+  timezone         String            @default("UTC")
+  referralCode     String            @unique
+  referredByUserId String?
+  lastSeenAt       DateTime?
+  createdAt        DateTime          @default(now())
+  updatedAt        DateTime          @updatedAt
+
+  referredBy       User?             @relation("UserReferrals", fields: [referredByUserId], references: [id])
+  referrals        User[]            @relation("UserReferrals")
+  telegramAccounts TelegramAccount[]
+  devices          Device[]
+  subscriptions    Subscription[]
+  payments         Payment[]
+  supportTickets   SupportTicket[]
+  outgoingReferrals Referral[]       @relation("Referrer")
+  incomingReferrals Referral[]       @relation("ReferredUser")
+  auditEvents      AuditEvent[]
+}
+
+model TelegramAccount {
+  id              String   @id @default(cuid())
+  userId          String
+  telegramUserId  String   @unique
+  username        String?
+  firstName       String?
+  lastName        String?
+  isBotBlocked    Boolean  @default(false)
+  lastBotStartAt  DateTime?
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+}
+
+model Device {
+  id               String         @id @default(cuid())
+  userId           String
+  subscriptionId   String?
+  platform         DevicePlatform
+  displayName      String
+  externalDeviceId String?
+  isActive         Boolean        @default(true)
+  createdAt        DateTime       @default(now())
+  updatedAt        DateTime       @updatedAt
+
+  user         User          @relation(fields: [userId], references: [id], onDelete: Cascade)
+  subscription Subscription? @relation(fields: [subscriptionId], references: [id], onDelete: SetNull)
+}
+
+model Plan {
+  id               String         @id @default(cuid())
+  code             String         @unique
+  title            String
+  description      String?
+  durationDays     Int
+  priceRub         Int
+  deviceLimit      Int            @default(1)
+  dataLimitBytes   BigInt?
+  isTrial          Boolean        @default(false)
+  isActive         Boolean        @default(true)
+  isPrivateTier    Boolean        @default(false)
+  createdAt        DateTime       @default(now())
+  updatedAt        DateTime       @updatedAt
+
+  subscriptions Subscription[]
+  promoCodes     PromoCode[]
+}
+
+model Subscription {
+  id                      String             @id @default(cuid())
+  userId                  String
+  planId                  String
+  status                  SubscriptionStatus
+  source                  String             @default("bot")
+  startsAt                DateTime           @default(now())
+  expiresAt               DateTime?
+  gracePeriodEndsAt       DateTime?
+  marzbanUserId           String?
+  activeLocationCode      String?
+  subscriptionUrl         String?
+  fallbackSubscriptionUrl String?
+  lastSyncedAt            DateTime?
+  createdAt               DateTime           @default(now())
+  updatedAt               DateTime           @updatedAt
+
+  user          User            @relation(fields: [userId], references: [id], onDelete: Cascade)
+  plan          Plan            @relation(fields: [planId], references: [id])
+  devices       Device[]
+  payments      Payment[]
+  marzbanUser   MarzbanUser?    @relation(fields: [marzbanUserId], references: [id], onDelete: SetNull)
+  accessKeys    AccessKey[]
+  supportTickets SupportTicket[]
+}
+
+model Payment {
+  id               String        @id @default(cuid())
+  userId           String
+  subscriptionId   String?
+  provider         BillingProvider
+  externalPaymentId String?
+  invoiceId        String?
+  amountRub        Int
+  currency         String        @default("RUB")
+  status           PaymentStatus
+  promoCodeId      String?
+  paidAt           DateTime?
+  createdAt        DateTime      @default(now())
+  updatedAt        DateTime      @updatedAt
+
+  user         User          @relation(fields: [userId], references: [id], onDelete: Cascade)
+  subscription Subscription? @relation(fields: [subscriptionId], references: [id], onDelete: SetNull)
+  promoCode    PromoCode?    @relation(fields: [promoCodeId], references: [id], onDelete: SetNull)
+}
+
+model MarzbanNode {
+  id              String        @id @default(cuid())
+  code            String        @unique
+  title           String
+  baseUrl         String
+  locationCode    String
+  countryCode     String
+  isDefault       Boolean       @default(false)
+  isActive        Boolean       @default(true)
+  inboundTag      String
+  createdAt       DateTime      @default(now())
+  updatedAt       DateTime      @updatedAt
+
+  marzbanUsers MarzbanUser[]
+}
+
+model MarzbanUser {
+  id                     String        @id @default(cuid())
+  nodeId                 String
+  externalUsername       String        @unique
+  externalSubscriptionId String?
+  subscriptionUrl        String?
+  statusRaw              String?
+  expiresAt              DateTime?
+  dataLimitBytes         BigInt?
+  usedTrafficBytes       BigInt?
+  createdAt              DateTime      @default(now())
+  updatedAt              DateTime      @updatedAt
+
+  node          MarzbanNode     @relation(fields: [nodeId], references: [id], onDelete: Cascade)
+  subscriptions Subscription[]
+  accessKeys    AccessKey[]
+}
+
+model AccessKey {
+  id              String        @id @default(cuid())
+  subscriptionId  String
+  marzbanUserId   String?
+  type            AccessKeyType
+  label           String
+  value           String
+  isActive        Boolean       @default(true)
+  createdAt       DateTime      @default(now())
+  updatedAt       DateTime      @updatedAt
+
+  subscription Subscription @relation(fields: [subscriptionId], references: [id], onDelete: Cascade)
+  marzbanUser   MarzbanUser? @relation(fields: [marzbanUserId], references: [id], onDelete: SetNull)
+}
+
+model SupportTicket {
+  id              String              @id @default(cuid())
+  userId          String
+  subscriptionId  String?
+  topic           String
+  diagnosticCode  String
+  status          SupportTicketStatus @default(open)
+  details         Json?
+  resolvedAt      DateTime?
+  createdAt       DateTime            @default(now())
+  updatedAt       DateTime            @updatedAt
+
+  user         User          @relation(fields: [userId], references: [id], onDelete: Cascade)
+  subscription Subscription? @relation(fields: [subscriptionId], references: [id], onDelete: SetNull)
+}
+
+model Referral {
+  id             String   @id @default(cuid())
+  referrerUserId String
+  referredUserId String   @unique
+  rewardRub      Int      @default(0)
+  rewardDays     Int      @default(0)
+  rewardGrantedAt DateTime?
+  createdAt      DateTime @default(now())
+
+  referrer     User @relation("Referrer", fields: [referrerUserId], references: [id], onDelete: Cascade)
+  referredUser User @relation("ReferredUser", fields: [referredUserId], references: [id], onDelete: Cascade)
+}
+
+model PromoCode {
+  id             String    @id @default(cuid())
+  code           String    @unique
+  title          String
+  discountRub    Int?
+  discountPercent Int?
+  planId         String?
+  maxRedemptions Int?
+  startsAt       DateTime?
+  endsAt         DateTime?
+  isActive       Boolean   @default(true)
+  createdAt      DateTime  @default(now())
+  updatedAt      DateTime  @updatedAt
+
+  plan     Plan?     @relation(fields: [planId], references: [id], onDelete: SetNull)
+  payments Payment[]
+}
+
+model Broadcast {
+  id          String        @id @default(cuid())
+  type        BroadcastType
+  title       String
+  message     String
+  audienceTag String?
+  scheduledAt DateTime?
+  sentAt      DateTime?
+  createdAt   DateTime      @default(now())
+  updatedAt   DateTime      @updatedAt
+}
+
+model AuditEvent {
+  id         String         @id @default(cuid())
+  actorType  AuditActorType
+  actorId    String?
+  userId     String?
+  eventName  String
+  entityType String
+  entityId   String
+  payload    Json?
+  createdAt  DateTime       @default(now())
+
+  user User? @relation(fields: [userId], references: [id], onDelete: SetNull)
+}
