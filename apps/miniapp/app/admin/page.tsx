@@ -42,6 +42,7 @@ type AdminPageProps = {
   searchParams?: Promise<{
     status?: string;
     search?: string;
+    login?: string; // e.g. /admin?login=error after failed loginAction
   }>;
 };
 
