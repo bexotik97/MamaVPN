@@ -1,4 +1,5 @@
 import Link from "next/link";
+import { getAdminApiKey, ensureAdminEnv } from "../../lib/admin-env";
 import { cookies } from "next/headers";
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
@@ -59,9 +60,11 @@ const statusOptions = [
 async function loginAction(formData: FormData) {
   "use server";
 
-  const apiKey = String(formData.get("apiKey") ?? "");
+  ensureAdminEnv();
+  const expected = getAdminApiKey();
+  const apiKey = String(formData.get("apiKey") ?? "").trim();
 
-  if (apiKey !== process.env.ADMIN_API_KEY) {
+  if (!expected || apiKey !== expected) {
     redirect("/admin?login=error");
   }
 
@@ -124,9 +127,12 @@ async function refreshSubscriptionAction(formData: FormData) {
 }
 
 export default async function AdminPage({ searchParams }: AdminPageProps) {
+  ensureAdminEnv();
+  const adminKey = getAdminApiKey();
   const params = (await searchParams) ?? {};
   const cookieStore = await cookies();
-  const isAuthorized = cookieStore.get(ADMIN_COOKIE_NAME)?.value === process.env.ADMIN_API_KEY;
+  const isAuthorized =
+    !!adminKey && cookieStore.get(ADMIN_COOKIE_NAME)?.value === adminKey;
 
   if (!isAuthorized) {
     return (
@@ -638,7 +644,7 @@ async function callAdminApi<T>(path: string, init?: RequestInit) {
   const response = await fetch(`${getApiBaseUrl()}${path}`, {
     ...init,
     headers: {
-      "x-admin-api-key": process.env.ADMIN_API_KEY ?? "",
+      "x-admin-api-key": getAdminApiKey() ?? "",
       ...(init?.headers ?? {})
     },
     cache: "no-store"
@@ -682,9 +688,11 @@ function redirectToAdmin(formData: FormData) {
 }
 
 async function assertAdminSession() {
+  ensureAdminEnv();
+  const adminKey = getAdminApiKey();
   const cookieStore = await cookies();
 
-  if (cookieStore.get(ADMIN_COOKIE_NAME)?.value !== process.env.ADMIN_API_KEY) {
+  if (!adminKey || cookieStore.get(ADMIN_COOKIE_NAME)?.value !== adminKey) {
     redirect("/admin");
   }
 }
