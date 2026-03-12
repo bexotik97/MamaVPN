@@ -13,7 +13,7 @@ function Nav() {
     <nav
       style={{
         display: "grid",
-        gridTemplateColumns: "repeat(4, 1fr)",
+        gridTemplateColumns: "repeat(5, 1fr)",
         gap: 8
       }}
     >
@@ -21,7 +21,8 @@ function Nav() {
         { href: "/", label: "Главная" },
         { href: "/plans", label: "Тарифы" },
         { href: "/support", label: "Поддержка" },
-        { href: "/referral", label: "Рефералка" }
+        { href: "/referral", label: "Рефералка" },
+        { href: "/admin", label: "Admin" }
       ].map((item) => (
         <Link
           key={item.href}

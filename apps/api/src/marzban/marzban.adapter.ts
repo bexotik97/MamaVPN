@@ -68,13 +68,82 @@ export class MarzbanAdapter {
     });
 
     if (!subscription?.marzbanUser) {
-      return;
+      return this.prisma.subscription.update({
+        where: { id: subscriptionId },
+        data: { status: "suspended", lastSyncedAt: new Date() }
+      });
     }
 
-    await this.marzbanService.suspendUser(subscription.marzbanUser.externalUsername);
+    if (!this.shouldUseMockProvisioning()) {
+      await this.marzbanService.suspendUser(subscription.marzbanUser.externalUsername);
+    }
+
     await this.prisma.subscription.update({
       where: { id: subscriptionId },
       data: { status: "suspended", lastSyncedAt: new Date() }
+    });
+  }
+
+  async resumeBySubscription(subscriptionId: string) {
+    await this.prisma.subscription.update({
+      where: { id: subscriptionId },
+      data: {
+        status: "active",
+        gracePeriodEndsAt: null
+      }
+    });
+
+    return this.syncSubscription(subscriptionId);
+  }
+
+  async syncSubscription(subscriptionId: string) {
+    const subscription = await this.prisma.subscription.findUnique({
+      where: { id: subscriptionId },
+      include: { marzbanUser: true }
+    });
+
+    if (!subscription) {
+      return null;
+    }
+
+    if (!subscription.marzbanUser) {
+      return this.prisma.subscription.update({
+        where: { id: subscriptionId },
+        data: {
+          lastSyncedAt: new Date()
+        }
+      });
+    }
+
+    if (this.shouldUseMockProvisioning() || subscription.marzbanUser.statusRaw?.startsWith("mock")) {
+      return this.prisma.subscription.update({
+        where: { id: subscriptionId },
+        data: {
+          lastSyncedAt: new Date()
+        }
+      });
+    }
+
+    try {
+      await this.marzbanService.modifyUser(subscription.marzbanUser.externalUsername, {
+        expire: subscription.expiresAt
+          ? Math.floor(subscription.expiresAt.getTime() / 1000)
+          : undefined,
+        status: subscription.status === "suspended" ? "disabled" : "active"
+      });
+    } catch (error) {
+      this.logger.warn(
+        `Failed to sync Marzban subscription ${subscriptionId}: ${
+          error instanceof Error ? error.message : String(error)
+        }`
+      );
+    }
+
+    return this.prisma.subscription.update({
+      where: { id: subscriptionId },
+      data: {
+        lastSyncedAt: new Date()
+      }
     });
   }
 

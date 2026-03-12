@@ -12,4 +12,12 @@ export class ProvisioningService {
   async suspend(subscriptionId: string) {
     return this.marzbanAdapter.suspendBySubscription(subscriptionId);
   }
+
+  async resume(subscriptionId: string) {
+    return this.marzbanAdapter.resumeBySubscription(subscriptionId);
+  }
+
+  async syncSubscription(subscriptionId: string) {
+    return this.marzbanAdapter.syncSubscription(subscriptionId);
+  }
 }
