@@ -10,18 +10,26 @@ let loaded = false;
 
 export function ensureAdminEnv(): void {
   if (loaded) return;
-  const cwd = process.cwd();
-  const candidates = [
-    resolve(cwd, ".env.local"),
-    resolve(cwd, ".env"),
-    resolve(cwd, "../../.env"), // apps/miniapp -> repo root
-    resolve(cwd, "../.env"),
-    resolve(cwd, "../../../.env")
-  ];
-  for (const p of candidates) {
-    if (existsSync(p)) {
-      loadEnv({ path: p, override: false });
+  try {
+    const cwd = process.cwd();
+    const candidates = [
+      resolve(cwd, ".env.local"),
+      resolve(cwd, ".env"),
+      resolve(cwd, "../../.env"), // apps/miniapp -> repo root
+      resolve(cwd, "../.env"),
+      resolve(cwd, "../../../.env")
+    ];
+    for (const p of candidates) {
+      try {
+        if (existsSync(p)) {
+          loadEnv({ path: p, override: false });
+        }
+      } catch {
+        // Serverless / read-only fs — ignore, use platform env only
+      }
     }
+  } catch {
+    // Never throw from here; Vercel injects ADMIN_API_KEY via dashboard
   }
   loaded = true;
 }

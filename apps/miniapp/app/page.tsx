@@ -1,5 +1,6 @@
 import Link from "next/link";
 import type { DashboardResponse } from "@mamavpn/shared";
+import { safeFetchJson } from "../lib/safe-api-fetch";
 
 const cards = [
   { title: "1 день", price: "49 ₽", note: "Быстрый вход" },
@@ -174,23 +175,24 @@ export default async function HomePage() {
 }
 
 async function loadDashboard(): Promise<DashboardResponse | null> {
-  const telegramUserId = process.env.DEMO_TELEGRAM_USER_ID;
-  const apiBaseUrl = process.env.NEXT_PUBLIC_API_BASE_URL ?? "http://localhost:3000";
-
-  if (!telegramUserId) {
-    return null;
-  }
-
   try {
-    const response = await fetch(`${apiBaseUrl}/users/telegram/${telegramUserId}/dashboard`, {
-      cache: "no-store"
-    });
+    const telegramUserId = process.env.DEMO_TELEGRAM_USER_ID;
+    const apiBaseUrl = process.env.NEXT_PUBLIC_API_BASE_URL ?? "http://localhost:3000";
 
-    if (!response.ok) {
+    if (!telegramUserId) {
       return null;
     }
 
-    return (await response.json()) as DashboardResponse;
+    if (
+      process.env.VERCEL &&
+      (apiBaseUrl.includes("localhost") || apiBaseUrl.includes("127.0.0.1"))
+    ) {
+      return null;
+    }
+
+    const base = apiBaseUrl.replace(/\/$/, "");
+    const url = `${base}/users/telegram/${telegramUserId}/dashboard`;
+    return await safeFetchJson<DashboardResponse>(url);
   } catch {
     return null;
   }

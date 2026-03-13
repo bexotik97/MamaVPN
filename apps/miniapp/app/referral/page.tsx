@@ -1,4 +1,5 @@
 import Link from "next/link";
+import { safeFetchJson } from "../../lib/safe-api-fetch";
 
 type ReferralProfile = {
   inviteLink: string;
@@ -100,23 +101,24 @@ export default async function ReferralPage() {
 }
 
 async function loadReferral(): Promise<ReferralProfile | null> {
-  const telegramUserId = process.env.DEMO_TELEGRAM_USER_ID;
-  const apiBaseUrl = process.env.NEXT_PUBLIC_API_BASE_URL ?? "http://localhost:3000";
-
-  if (!telegramUserId) {
-    return null;
-  }
-
   try {
-    const response = await fetch(`${apiBaseUrl}/referrals/telegram/${telegramUserId}`, {
-      cache: "no-store"
-    });
+    const telegramUserId = process.env.DEMO_TELEGRAM_USER_ID;
+    const apiBaseUrl = process.env.NEXT_PUBLIC_API_BASE_URL ?? "http://localhost:3000";
 
-    if (!response.ok) {
+    if (!telegramUserId) {
       return null;
     }
 
-    return (await response.json()) as ReferralProfile;
+    if (
+      process.env.VERCEL &&
+      (apiBaseUrl.includes("localhost") || apiBaseUrl.includes("127.0.0.1"))
+    ) {
+      return null;
+    }
+
+    const base = apiBaseUrl.replace(/\/$/, "");
+    const url = `${base}/referrals/telegram/${telegramUserId}`;
+    return await safeFetchJson<ReferralProfile>(url);
   } catch {
     return null;
   }

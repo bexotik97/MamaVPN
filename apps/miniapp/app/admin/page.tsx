@@ -71,7 +71,8 @@ async function loginAction(formData: FormData) {
   const cookieStore = await cookies();
   cookieStore.set(ADMIN_COOKIE_NAME, apiKey, {
     httpOnly: true,
-    sameSite: "strict",
+    // lax: после POST+redirect браузер надёжнее шлёт куку на следующий GET (strict иногда режет на Vercel)
+    sameSite: "lax",
     secure: process.env.NODE_ENV === "production",
     path: "/",
     maxAge: 60 * 60 * 12
@@ -84,7 +85,7 @@ async function logoutAction() {
   "use server";
 
   const cookieStore = await cookies();
-  cookieStore.delete(ADMIN_COOKIE_NAME);
+  cookieStore.delete({ name: ADMIN_COOKIE_NAME, path: "/" });
   redirect("/admin");
 }
 
@@ -621,27 +622,44 @@ function statusColor(status: AdminSubscription["status"]) {
   }
 }
 
-async function loadOverview() {
-  return callAdminApi<AdminOverview>("/admin/overview");
+const EMPTY_OVERVIEW: AdminOverview = {
+  users: 0,
+  subscriptions: 0,
+  payments: 0,
+  openSupportTickets: 0
+};
+
+async function loadOverview(): Promise<AdminOverview> {
+  try {
+    return await callAdminApi<AdminOverview>("/admin/overview");
+  } catch {
+    return EMPTY_OVERVIEW;
+  }
 }
 
-async function loadSubscriptions(status?: string, search?: string) {
-  const query = new URLSearchParams();
-
-  if (status) {
-    query.set("status", status);
+async function loadSubscriptions(status?: string, search?: string): Promise<AdminSubscription[]> {
+  try {
+    const query = new URLSearchParams();
+    if (status) query.set("status", status);
+    if (search) query.set("search", search);
+    const suffix = query.toString() ? `?${query.toString()}` : "";
+    return await callAdminApi<AdminSubscription[]>(`/admin/subscriptions${suffix}`);
+  } catch {
+    return [];
   }
-
-  if (search) {
-    query.set("search", search);
-  }
-
-  const suffix = query.toString() ? `?${query.toString()}` : "";
-  return callAdminApi<AdminSubscription[]>(`/admin/subscriptions${suffix}`);
 }
 
-async function callAdminApi<T>(path: string, init?: RequestInit) {
-  const response = await fetch(`${getApiBaseUrl()}${path}`, {
+async function callAdminApi<T>(path: string, init?: RequestInit): Promise<T> {
+  const base = getApiBaseUrl();
+  // На Vercel запрос на localhost не дойдёт — не дергать, чтобы не таймаутить
+  if (
+    process.env.VERCEL &&
+    (base.includes("localhost") || base.includes("127.0.0.1"))
+  ) {
+    throw new Error("API not configured");
+  }
+
+  const response = await fetch(`${base}${path}`, {
     ...init,
     headers: {
       "x-admin-api-key": getAdminApiKey() ?? "",
